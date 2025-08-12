@@ -1,83 +1,464 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>צ'ק ליסט משמרות</title>
-<style>
-body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; direction: rtl; }
-h1 { text-align: center; color: #333; }
-.section-title { font-weight: bold; margin-top: 20px; color: #444; }
-.task { display: flex; align-items: center; margin: 5px 0; }
-.task input { margin-left: 10px; }
-button { margin-top: 20px; padding: 10px 15px; font-size: 16px; cursor: pointer; }
-</style>
-</head>
-<body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shift‑Checklist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji"}</style>
+    <!-- React 18 + Babel (so this file runs without build tools) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-gray-50 text-gray-900">
+    <div id="root"></div>
 
-<h1>צ'ק ליסט משמרות</h1>
+    <script type="text/babel">
+      const { useEffect, useMemo, useState } = React;
 
-<div id="checklist"></div>
+      // ===== Storage / Helpers =====
+      const LS_TEMPLATES = "sc_templates_v2"; // force fresh defaults
+      const LS_TPL_VERSION = "sc_tpl_version";
+      const TPL_VERSION = 2;
+      const LS_SHIFTS = "sc_shifts_v1";
+      const RETENTION_DAYS = 30;
 
-<button onclick="downloadReport()">הורד דוח</button>
+      const uuid = () => (crypto?.randomUUID ? crypto.randomUUID() : (Date.now().toString(36)+Math.random().toString(36).slice(2)));
+      const ymd = (d) => new Date(d).toISOString().slice(0,10);
 
-<script>
-const eveningTasks = [
-    "לכתוב רשימת הכנות למחר (חובה, הכנות)",
-    "לוודא הזמנות למחר ביומן, לבדוק אם צריך לעדכן את הקונדיטוריה או המטבח (חובה, הכנות)",
-    "להתחיל לבצע מטלות ערב (חובה, מטלות)",
-    "לספור קופה, לוודא עם משמרת בוקר (חובה, מטלות)",
-    "לבדוק סטטוס מי סוכר, שוקו וג'ינג'ר (חובה, הכנות)",
-    "לוודא שכל מטלות הערב בוצעו (חובה, מטלות)",
-    "לעשות רשימת מאפים בשעה 20:00 (חובה, מטלות)",
-    "למלא את המלאים בבר, כולל מגירות שירותים ועמדת TA (חובה, הכנות)",
-    "הוצאת פחים וקשירה של הפחים החדשים (חובה, ניקיון)",
-    "איפוס שירותים (חובה, ניקיון)",
-    "שטיפה יסודית מאחורי מדף בחושות (חובה, ניקיון)",
-    "לנקות את הבר (חובה, ניקיון)",
-    "טיאטוא ואיפוס של הבחוץ (חובה, ניקיון)",
-    "הוצאת מאפים (חובה, מטלות)",
-    "למלא מקפיא עוגות (לא חובה, הכנות)",
-    "ניקיון מדף לחמים (חובה, ניקיון)",
-    "ניקיון שולחן מאפים (חובה, ניקיון)",
-    "ספירת וסגירת קופה (חובה, מטלות)",
-    "סגירת מכונת קפה (חובה, מטלות)",
-    "סיבוב מקררים, תנור וגז (חובה, בטיחות)",
-    "סיבוב חלונות ומזגנים במסעדה (חובה, בטיחות)",
-    "כיבוי אורות ומוזיקה (חובה, בטיחות)"
-];
+      const loadShifts = () => { try { return JSON.parse(localStorage.getItem(LS_SHIFTS) || "[]"); } catch { return []; } };
+      const saveShifts = (arr) => localStorage.setItem(LS_SHIFTS, JSON.stringify(arr));
+      const purgeOldShifts = () => {
+        const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - RETENTION_DAYS);
+        const kept = loadShifts().filter(s => new Date(s.openedAt) >= cutoff);
+        saveShifts(kept);
+      };
 
-function loadChecklist() {
-    const container = document.getElementById("checklist");
-    eveningTasks.forEach(task => {
-        const div = document.createElement("div");
-        div.className = "task";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        div.appendChild(checkbox);
-        const label = document.createElement("label");
-        label.textContent = task;
-        div.appendChild(label);
-        container.appendChild(div);
-    });
-}
+      function downloadTextFile(filename, content){
+        try{ const blob=new Blob([content],{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }catch(err){ console.error('Download failed:', err); }
+      }
 
-function downloadReport() {
-    const checkedTasks = [];
-    document.querySelectorAll(".task input").forEach((cb, idx) => {
-        if (cb.checked) checkedTasks.push(eveningTasks[idx]);
-    });
-    const blob = new Blob([checkedTasks.join("\n")], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "shift_report.txt";
-    a.click();
-    URL.revokeObjectURL(url);
-}
+      // ===== Default Templates (FULL lists) =====
+      function defaultTemplates(){
+        return {
+          morning: {
+            id: "morning", name: "משמרת בוקר", tasks: [
+              { id: uuid(), title: "— פתיחה —", isHeader: true, order: 1 },
+              { id: uuid(), title: "פתיחת מכונת קפה", category: "מטלות", required: true, order: 2 },
+              { id: uuid(), title: "ספירת ופתיחת קופה", category: "מטלות", required: true, order: 3 },
+              { id: uuid(), title: "להדליק אורות, מזגנים, ומוזיקה", category: "מטלות", required: true, order: 4 },
+              { id: uuid(), title: "להוציא את הריהוט", category: "מטלות", required: true, order: 5 },
+              { id: uuid(), title: "לסדר מאפינס, חמאה, ריבה וסלסלת עוגיות", category: "מטלות", required: true, order: 6 },
+              { id: uuid(), title: "לסדר לחמים על המדף ולפרוס למטבח", category: "מטלות", required: true, order: 7 },
+              { id: uuid(), title: "לוודא קינוחים בוולט", category: "מטלות", required: true, order: 8 },
+              { id: uuid(), title: "לוודא מלאים בבר", category: "הכנות", required: true, order: 9 },
+              { id: uuid(), title: "לחמם לחמים שנשארו מאתמול", category: "הכנות", required: true, order: 10 },
+              { id: uuid(), title: "לבדוק הזמנות אוכל מקום וקונדיטוריה להיום ביומן", category: "הכנות", required: true, order: 11 },
+              { id: uuid(), title: "לנקות מעל הויטרינה", category: "ניקיון", required: true, order: 12 },
+              { id: uuid(), title: "— מהלך/סוף משמרת —", isHeader: true, order: 13 },
+              { id: uuid(), title: "לעשות מטלות משמרת בוקר", category: "מטלות", required: true, order: 14 },
+              { id: uuid(), title: "למלא מלאים בבר ובמסעדה, כולל עמדת TA, שירותים, קינוחים ומגירות", category: "הכנות", required: true, order: 15 },
+              { id: uuid(), title: "לאפס את הבחוץ, כולל מטאטא, סוכרים ומלחים, פינויים וניקיון דלת", category: "ניקיון", required: true, order: 16 },
+              { id: uuid(), title: "ניקיון ואיפוס שירותים", category: "ניקיון", required: true, order: 17 },
+              { id: uuid(), title: "למלא עוגות במקפיא עוגות", category: "הכנות", required: false, order: 18 },
+              { id: uuid(), title: "ניקיון בר ומכונות, כולל מסחטות ומכונת קפה", category: "ניקיון", required: true, order: 19 },
+              { id: uuid(), title: "לספור קופה, ולתאם עם משמרת ערב", category: "מטלות", required: false, order: 20 },
+            ]
+          },
+          evening: {
+            id: "evening", name: "משמרת ערב", tasks: [
+              { id: uuid(), title: "— תחילת משמרת —", isHeader: true, order: 1 },
+              { id: uuid(), title: "לכתוב רשימת הכנות למחר", category: "הכנות", required: true, order: 2 },
+              { id: uuid(), title: "לוודא הזמנות למחר ביומן, לבדוק אם צריך לעדכן את הקונדיטוריה או המטבח", category: "הכנות", required: true, order: 3 },
+              { id: uuid(), title: "להתחיל לבצע מטלות ערב", category: "מטלות", required: true, order: 4 },
+              { id: uuid(), title: "לספור קופה, לוודא עם משמרת בוקר", category: "מטלות", required: true, order: 5 },
+              { id: uuid(), title: "לבדוק סטטוס מי סוכר, שוקו וג׳ינג׳ר", category: "הכנות", required: true, order: 6 },
+              { id: uuid(), title: "— מהלך וסוף משמרת —", isHeader: true, order: 7 },
+              { id: uuid(), title: "לוודא שכל מטלות הערב בוצעו", category: "מטלות", required: true, order: 8 },
+              { id: uuid(), title: "לעשות רשימת מאפים בשעה 20:00", category: "מטלות", required: true, order: 9 },
+              { id: uuid(), title: "למלא את המלאים בבר, כולל מגירות שירותים ועמדת TA", category: "הכנות", required: true, order: 10 },
+              { id: uuid(), title: "הוצאת פחים וקשירה של הפחים החדשים", category: "ניקיון", required: true, order: 11 },
+              { id: uuid(), title: "איפוס שירותים, כולל סבון ידיים, אקונומיקה, ניקיון אסלה ומראה והוצאת זבל", category: "ניקיון", required: true, order: 12 },
+              { id: uuid(), title: "שטיפה יסודית ולוודא ששוטפים מאחורי מדף בחושות", category: "ניקיון", required: true, order: 13 },
+              { id: uuid(), title: "לנקות את הבר, כולל מכונות סחוטים, טוסטר, מכונת קפה וויטרינת כריכים", category: "ניקיון", required: true, order: 14 },
+              { id: uuid(), title: "טיאטוא ואיפוס של הבחוץ, כולל סוכרים ומלחים ועמדת TA", category: "ניקיון", required: true, order: 15 },
+              { id: uuid(), title: "הוצאת מאפים", category: "מטלות", required: true, order: 16 },
+              { id: uuid(), title: "למלא מקפיא עוגות", category: "הכנות", required: false, order: 17 },
+              { id: uuid(), title: "ניקיון מדף לחמים", category: "ניקיון", required: true, order: 18 },
+              { id: uuid(), title: "ניקיון שולחן מאפים", category: "ניקיון", required: true, order: 19 },
+              { id: uuid(), title: "ספירת וסגירת קופה", category: "מטלות", required: true, order: 20 },
+              { id: uuid(), title: "סגירת מכונת קפה", category: "מטלות", required: true, order: 21 },
+              { id: uuid(), title: "סיבוב מקררים, תנור וגז", category: "בטיחות", required: true, order: 22 },
+              { id: uuid(), title: "סיבוב חלונות ומזגנים במסעדה", category: "בטיחות", required: true, order: 23 },
+              { id: uuid(), title: "כיבוי אורות ומוזיקה, לא לשכוח בחוץ ובמחסן", category: "בטיחות", required: true, order: 24 },
+            ]
+          }
+        };
+      }
 
-loadChecklist();
-</script>
+      function loadTemplates(){
+        const storedVersion = Number(localStorage.getItem(LS_TPL_VERSION) || "0");
+        const raw = localStorage.getItem(LS_TEMPLATES);
+        if (raw && storedVersion === TPL_VERSION){ try { return JSON.parse(raw); } catch {} }
+        const defaults = defaultTemplates();
+        localStorage.setItem(LS_TEMPLATES, JSON.stringify(defaults));
+        localStorage.setItem(LS_TPL_VERSION, String(TPL_VERSION));
+        return defaults;
+      }
+      function saveTemplates(tpls){ localStorage.setItem(LS_TEMPLATES, JSON.stringify(tpls)); localStorage.setItem(LS_TPL_VERSION, String(TPL_VERSION)); }
 
-</body>
+      const Pill = ({children}) => <span className="px-2 py-0.5 text-xs rounded-full bg-gray-200">{children}</span>;
+      const Badge = ({children}) => <span className="px-2 py-1 text-xs rounded-md bg-gray-100 border">{children}</span>;
+      const Section = ({title, children}) => (<div className="mb-6"><div className="text-xl font-semibold mb-2">{title}</div><div className="space-y-3">{children}</div></div>);
+
+      // ===== Summary builder & tests =====
+      function buildDailySummary(shifts, date){
+        const ymdLocal = (iso) => new Date(iso).toISOString().slice(0,10);
+        const list = (shifts||[]).filter(s => ymdLocal(s.openedAt) === date);
+        if(!list.length) return 'אין משמרות לתאריך זה.';
+        const labelForStatus = (st) => st==='done'? 'בוצע' : st==='na'? 'לא רלוונטי' : st==='issue'? 'בעיה' : 'ממתין';
+        const lines = [`דוח יומי – ${date}`, ""]; 
+        list.sort((a,b)=> a.openedAt.localeCompare(b.openedAt)).forEach((s,idx)=>{
+          lines.push(`${idx+1}) ${s.type==='morning'?'בוקר':'ערב'} – ${s.employeeName}`);
+          const nonHeaders = (s.tasks||[]).filter(t=>!t.isHeader);
+          const done = nonHeaders.filter(t=>t.status==='done').length;
+          const total = nonHeaders.length;
+          lines.push(`   השלמה: ${done}/${total}${s.status==='closed' ? ' | נסגרה':' | פתוחה'}`);
+          const issues = nonHeaders.filter(t=>t.status==='issue');
+          if(issues.length){ issues.forEach((t,i)=> lines.push(`   חריגה ${i+1}: ${t.title}${t.note? ` – ${t.note}`: ''}`)); }
+          lines.push("");
+        });
+        return lines.join("\n");
+      }
+      (function(){
+        try{ const empty = buildDailySummary([], '2099-01-01'); console.assert(typeof empty==='string' && empty.includes('אין משמרות')); }catch(e){ console.error('Test failed', e); }
+      })();
+
+      // ===== App =====
+      function App(){
+        const [templates, setTemplates] = useState();
+        const [shifts, setShifts] = useState([]);
+        const [activeTab, setActiveTab] = useState("dashboard");
+        const [activeShiftId, setActiveShiftId] = useState(null);
+        const [adminEmail, setAdminEmail] = useState(localStorage.getItem("sc_admin_email") || "your@email.com");
+
+        useEffect(()=>{ purgeOldShifts(); setTemplates(loadTemplates()); setShifts(loadShifts()); },[]);
+        useEffect(()=>{ if(templates) saveTemplates(templates); },[templates]);
+        useEffect(()=>{ localStorage.setItem("sc_admin_email", adminEmail); },[adminEmail]);
+        useEffect(()=>{ saveShifts(shifts); },[shifts]);
+
+        const activeShift = useMemo(()=> shifts.find(s=>s.id===activeShiftId)||null, [shifts, activeShiftId]);
+
+        const startShift = (type, employeeName) => {
+          if(!templates) return;
+          const tpl = templates[type];
+          const shiftId = uuid();
+          const tasks = tpl.tasks.slice().sort((a,b)=> (a.order||0)-(b.order||0)).map(t=> ({
+            id: t.id, title: t.title, category: t.category, required: t.required, isHeader: !!t.isHeader, status: t.isHeader? 'done' : 'pending'
+          }));
+          const rec = { id: shiftId, type, employeeName, openedAt: new Date().toISOString(), status: 'open', tasks };
+          setShifts(prev=>[rec, ...prev]); setActiveShiftId(shiftId); setActiveTab('shift');
+        };
+        const updateTask = (shiftId, taskId, patch) => setShifts(prev=> prev.map(s=> s.id!==shiftId ? s : ({...s, tasks: s.tasks.map(t=> t.id===taskId? {...t, ...patch}: t)})));
+        const closeShift = (shiftId) => setShifts(prev=> prev.map(s=> s.id===shiftId? ({...s, status:'closed', closedAt:new Date().toISOString()}): s));
+        const reopenShift = (shiftId) => setShifts(prev=> prev.map(s=> s.id===shiftId? ({...s, status:'open', closedAt:undefined}): s));
+        const deleteShift = (shiftId) => setShifts(prev => prev.filter(s => s.id !== shiftId));
+        const purgeClosedBefore = (dateStr) => { const cutoff = new Date(dateStr); setShifts(prev => prev.filter(s => !(s.closedAt && new Date(s.closedAt) <= cutoff))); };
+
+        const labelForStatus = (st) => st==='done'? 'בוצע' : st==='na'? 'לא רלוונטי' : st==='issue'? 'בעיה' : 'ממתין';
+        const subjectForShift = (s) => `דוח משמרת ${s.type==='morning'?'בוקר':'ערב'} – ${s.employeeName} – ${ymd(s.openedAt)}`;
+        const filenameForShift = (s) => `shift_${s.type}_${ymd(s.openedAt)}_${s.employeeName.replace(/\s+/g,'_')}.txt`;
+        const formatShiftReport = (s) => {
+          const opened = new Date(s.openedAt).toLocaleString(); const closed = s.closedAt? new Date(s.closedAt).toLocaleString() : '—';
+          const issues = s.tasks.filter(t=>!t.isHeader && t.status==='issue');
+          const done = s.tasks.filter(t=>!t.isHeader && t.status==='done').length;
+          const total = s.tasks.filter(t=>!t.isHeader).length;
+          const lines = [];
+          lines.push(`דוח משמרת – ${s.type==='morning'?'בוקר':'ערב'}`);
+          lines.push(`עובד: ${s.employeeName}`);
+          lines.push(`נפתחה: ${opened}`);
+          lines.push(`נסגרה: ${closed}`);
+          lines.push("");
+          lines.push(`השלמה: ${done}/${total}`);
+          if (issues.length){ lines.push(""); lines.push("חריגים:"); issues.forEach((t,i)=> lines.push(`${i+1}. ${t.title}${t.note? ` – ${t.note}`: ''}`)); }
+          lines.push(""); lines.push("סטטוסים:");
+          s.tasks.forEach((t,i)=>{ if(t.isHeader){ lines.push(""); lines.push(t.title.replace(/^—\s*|\s*—$/g, "")); } else { lines.push(`${i}. ${t.title} – ${labelForStatus(t.status)}${t.note? ` | הערה: ${t.note}`: ''}`); } });
+          return lines.join("\n");
+        };
+        const openEmail = (to, subject, body) => { window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
+        const openGmail = (to, subject, body) => { const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; window.open(url, '_blank'); };
+        const openOutlookWeb = (to, subject, body) => { const url = `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; window.open(url, '_blank'); };
+        const copyReport = async (text) => { try { await navigator.clipboard.writeText(text); alert('הדוח הועתק ללוח'); } catch { alert('לא הצלחתי להעתיק.'); } };
+        const generateDailySummary = (date) => buildDailySummary(shifts, date);
+
+        return (
+          <div className="min-h-screen">
+            <header className="sticky top-0 bg-white border-b z-10">
+              <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+                <div className="text-2xl font-bold">Shift‑Checklist</div>
+                <div className="ml-auto flex items-center gap-2">
+                  {['dashboard','shift','reports','settings'].map(key=> (
+                    <button key={key} onClick={()=>setActiveTab(key)} className={`px-3 py-1.5 rounded-md border ${activeTab===key? 'bg-gray-900 text-white':'bg-white'}`}>
+                      {key==='dashboard'? 'לוח בקרה' : key==='shift'? 'משמרת' : key==='reports'? 'דוחות':'הגדרות'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-5xl mx-auto px-4 py-6">
+              {activeTab==='dashboard' && (<Dashboard shifts={shifts} onStart={startShift} onOpen={(id)=>{ setActiveShiftId(id); setActiveTab('shift'); }} />)}
+              {activeTab==='shift' && (
+                <ShiftView shift={activeShift} onUpdateTask={updateTask} onClose={closeShift} onReopen={reopenShift}
+                  onDelete={id => { if(confirm('למחוק את המשמרת הזו? זה בלתי הפיך.')) deleteShift(id); }}
+                  adminEmail={adminEmail}
+                  onEmail={(s)=> openEmail(adminEmail, subjectForShift(s), formatShiftReport(s))}
+                  onEmailGmail={(s)=> openGmail(adminEmail, subjectForShift(s), formatShiftReport(s))}
+                  onEmailOutlook={(s)=> openOutlookWeb(adminEmail, subjectForShift(s), formatShiftReport(s))}
+                  onCopyReport={(s)=> copyReport(formatShiftReport(s))}
+                  onDownload={(s)=> downloadTextFile(filenameForShift(s), formatShiftReport(s))}
+                />
+              )}
+              {activeTab==='reports' && (
+                <Reports shifts={shifts} adminEmail={adminEmail}
+                  onEmailDaily={(date)=> openEmail(adminEmail, `דוח יומי – ${date}`, generateDailySummary(date))}
+                  onDownloadDaily={(date)=> downloadTextFile(`daily_${date}.txt`, generateDailySummary(date))}
+                  onPurgeClosedBefore={(date)=>{ const cutoff=new Date(date); setShifts(prev=> prev.filter(s=> !(s.closedAt && new Date(s.closedAt) <= cutoff))); }}
+                />
+              )}
+              {activeTab==='settings' && templates && (
+                <Settings templates={templates} setTemplates={setTemplates} adminEmail={adminEmail} setAdminEmail={setAdminEmail} />
+              )}
+            </main>
+
+            <footer className="py-10 text-center text-xs text-gray-500">© {new Date().getFullYear()} Shift‑Checklist • נתונים נשמרים 30 יום • ללא תמונות</footer>
+          </div>
+        );
+      }
+
+      function Dashboard({shifts, onStart, onOpen}){
+        const [name, setName] = useState("");
+        const [type, setType] = useState('morning');
+        const openShifts = shifts.filter(s=> s.status==='open');
+        const today = ymd(new Date());
+        const todayShifts = shifts.filter(s=> ymd(s.openedAt)===today);
+        return (
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white p-4 rounded-2xl shadow border">
+              <Section title="פתח משמרת חדשה">
+                <label className="text-sm block">שם עובד
+                  <input value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2" placeholder="שם פרטי" />
+                </label>
+                <label className="text-sm block mt-2">סוג משמרת</label>
+                <div className="mt-1 flex gap-2">
+                  <button onClick={()=>setType('morning')} className={`px-3 py-2 rounded-md border ${type==='morning'?'bg-gray-900 text-white':'bg-white'}`}>בוקר</button>
+                  <button onClick={()=>setType('evening')} className={`px-3 py-2 rounded-md border ${type==='evening'?'bg-gray-900 text-white':'bg-white'}`}>ערב</button>
+                </div>
+                <button onClick={()=> name.trim() && onStart(type, name.trim())} disabled={!name.trim()} className="mt-3 px-4 py-2 rounded-md bg-black text-white disabled:opacity-50">פתח משמרת</button>
+                <div className="text-xs text-gray-500 mt-1">* סניף יחיד, אין צורך בבחירה</div>
+              </Section>
+            </div>
+            <div className="bg-white p-4 rounded-2xl shadow border">
+              <Section title="משמרות פתוחות">
+                {!openShifts.length && <div className="text-sm text-gray-500">אין משמרות פתוחות כרגע.</div>}
+                <ul className="space-y-2">
+                  {openShifts.map(s=> (
+                    <li key={s.id} className="flex items-center justify-between border rounded-md p-2">
+                      <div className="flex items-center gap-2">
+                        <Badge>{s.type==='morning'? 'בוקר':'ערב'}</Badge>
+                        <div className="text-sm">{s.employeeName}</div>
+                        <Pill>{new Date(s.openedAt).toLocaleTimeString()}</Pill>
+                      </div>
+                      <button onClick={()=>onOpen(s.id)} className="px-3 py-1.5 rounded-md border">פתח</button>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+              <Section title={`משמרות היום (${today})`}>
+                {!todayShifts.length && <div className="text-sm text-gray-500">לא נפתחו משמרות היום.</div>}
+                <ul className="space-y-2">
+                  {todayShifts.map(s=> (
+                    <li key={s.id} className="flex items-center justify-between border rounded-md p-2">
+                      <div className="flex items-center gap-2">
+                        <Badge>{s.type==='morning'? 'בוקר':'ערב'}</Badge>
+                        <div className="text-sm">{s.employeeName}</div>
+                        <Pill>{s.status==='closed'? 'נסגרה':'פתוחה'}</Pill>
+                      </div>
+                      <button onClick={()=>onOpen(s.id)} className="px-3 py-1.5 rounded-md border">פתח</button>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            </div>
+          </div>
+        );
+      }
+
+      function ShiftView({shift, onUpdateTask, onClose, onReopen, onDelete, adminEmail, onEmail, onEmailGmail, onEmailOutlook, onCopyReport, onDownload}){
+        if(!shift) return <div className="text-sm text-gray-500">לא נבחרה משמרת.</div>;
+        const doneCount = shift.tasks.filter(t=> !t.isHeader && t.status==='done').length;
+        const total = shift.tasks.filter(t=> !t.isHeader).length;
+        return (
+          <div className="bg-white p-4 rounded-2xl shadow border">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Badge>{shift.type==='morning'? 'בוקר':'ערב'}</Badge>
+                <div className="font-medium">{shift.employeeName}</div>
+                <Pill>נפתח: {new Date(shift.openedAt).toLocaleString()}</Pill>
+                {shift.closedAt && <Pill>נסגר: {new Date(shift.closedAt).toLocaleString()}</Pill>}
+              </div>
+              <div className="text-sm">השלמה: {doneCount}/{total}</div>
+            </div>
+            <div className="space-y-2">
+              {shift.tasks.map(t=> (
+                t.isHeader ? (
+                  <div key={t.id} className="px-2 py-1 text-xs font-semibold text-gray-600 bg-gray-100 rounded-md border">{t.title.replace(/^—\s*|\s*—$/g, "")}</div>
+                ) : (
+                  <div key={t.id} className="border rounded-md p-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-sm">
+                        {t.title}
+                        {t.required && <span className="ml-2 text-red-600 text-xs">חובה</span>}
+                        {t.category && <span className="ml-2 text-xs text-gray-500">({t.category})</span>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <StatusButton label="בוצע" active={t.status==='done'} onClick={()=>onUpdateTask(shift.id, t.id, {status:'done'})} />
+                        <StatusButton label="לא רלוונטי" active={t.status==='na'} onClick={()=>onUpdateTask(shift.id, t.id, {status:'na'})} />
+                        <StatusButton label="בעיה" active={t.status==='issue'} onClick={()=>onUpdateTask(shift.id, t.id, {status:'issue'})} />
+                        <StatusButton label="ממתין" active={t.status==='pending'} onClick={()=>onUpdateTask(shift.id, t.id, {status:'pending'})} />
+                      </div>
+                    </div>
+                    <textarea className="mt-2 w-full border rounded-md px-2 py-1 text-sm" placeholder="הערה אופציונלית" value={t.note || ''} onChange={e=>onUpdateTask(shift.id, t.id, {note:e.target.value})} />
+                  </div>
+                )
+              ))}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {shift.status==='open' ? (
+                <button onClick={()=>onClose(shift.id)} className="px-4 py-2 rounded-md bg-black text-white">סגור משמרת</button>
+              ) : (
+                <button onClick={()=>onReopen(shift.id)} className="px-4 py-2 rounded-md border">פתח מחדש</button>
+              )}
+              <button onClick={()=>onDownload(shift)} className="px-4 py-2 rounded-md border">הורד דוח</button>
+              <button onClick={()=>onEmail(shift)} className="px-4 py-2 rounded-md border">שלח דוח (mailto)</button>
+              <button onClick={()=>onEmailGmail(shift)} className="px-4 py-2 rounded-md border">פתח ב‑Gmail</button>
+              <button onClick={()=>onEmailOutlook(shift)} className="px-4 py-2 rounded-md border">פתח ב‑Outlook Web</button>
+              <button onClick={()=>onCopyReport(shift)} className="px-4 py-2 rounded-md border">העתק דוח</button>
+              <button onClick={()=>onDelete(shift.id)} className="px-4 py-2 rounded-md border text-red-600">מחק משמרת</button>
+              <div className="text-xs text-gray-500 self-center">ישלח אל: {adminEmail}</div>
+            </div>
+          </div>
+        );
+      }
+      const StatusButton = ({label, active, onClick}) => (<button onClick={onClick} className={`px-2 py-1 text-xs rounded-md border ${active? 'bg-gray-900 text-white':'bg-white'}`}>{label}</button>);
+
+      function Reports({shifts, adminEmail, onEmailDaily, onDownloadDaily, onPurgeClosedBefore}){
+        const [date, setDate] = useState(ymd(new Date()));
+        const [purgeDate, setPurgeDate] = useState(ymd(new Date()));
+        const groups = useMemo(()=> shifts.slice().sort((a,b)=> b.openedAt.localeCompare(b.openedAt)).reduce((acc,s)=>{ const d=ymd(s.openedAt); (acc[d] ||= []).push(s); return acc; }, {}), [shifts]);
+        const selected = groups[date] || [];
+        return (
+          <div className="bg-white p-4 rounded-2xl shadow border">
+            <Section title="דוחות יומיים">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-sm">תאריך
+                  <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="mt-1 border rounded-md px-3 py-2" />
+                </label>
+                <button onClick={()=>onDownloadDaily(date)} className="px-4 py-2 rounded-md border">הורד דוח יומי</button>
+                <button onClick={()=>onEmailDaily(date)} className="px-4 py-2 rounded-md border">שלח במייל</button>
+                <div className="text-xs text-gray-500">ישלח אל: {adminEmail}</div>
+              </div>
+            </Section>
+            <Section title="משמרות בתאריך שנבחר">
+              {!selected.length && <div className="text-sm text-gray-500">אין משמרות לתאריך זה.</div>}
+              <ul className="space-y-2">
+                {selected.map(s=> (
+                  <li key={s.id} className="border rounded-md p-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Badge>{s.type==='morning'? 'בוקר':'ערב'}</Badge>
+                      <div className="text-sm">{s.employeeName}</div>
+                      <Pill>{s.status==='closed'? 'נסגרה':'פתוחה'}</Pill>
+                    </div>
+                    <div className="text-xs text-gray-500">נפתחה: {new Date(s.openedAt).toLocaleTimeString()}</div>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+            <Section title="מחיקה וניקוי ארכיון">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="text-sm">מחק משמרות **סגורות** עד תאריך
+                  <input type="date" value={purgeDate} onChange={e=>setPurgeDate(e.target.value)} className="mt-1 border rounded-md px-3 py-2" />
+                </label>
+                <button onClick={()=>{ if(confirm('למחוק את כל המשמרות הסגורות עד התאריך שנבחר?')) onPurgeClosedBefore(purgeDate); }} className="px-4 py-2 rounded-md border text-red-600">מחק סגורות עד תאריך</button>
+                <div className="text-xs text-gray-500">טיפ: יש גם ניקוי אוטומטי לאחר 30 יום.</div>
+              </div>
+            </Section>
+          </div>
+        );
+      }
+
+      function Settings({templates, setTemplates, adminEmail, setAdminEmail}){
+        const [active, setActive] = useState('morning');
+        const tpl = templates[active];
+        const addTask = () => { const copy={...templates}; copy[active].tasks.push({ id: uuid(), title: 'משימה חדשה', order: (tpl.tasks.at(-1)?.order || 0) + 1 }); setTemplates(copy); };
+        const updateTask = (taskId, patch) => { const copy={...templates}; copy[active].tasks = copy[active].tasks.map(t=> t.id===taskId? {...t, ...patch}: t); setTemplates(copy); };
+        const removeTask = (taskId) => { const copy={...templates}; copy[active].tasks = copy[active].tasks.filter(t=> t.id!==taskId); setTemplates(copy); };
+        const reorder = (idx, dir) => { const copy={...templates}; const arr = copy[active].tasks.slice(); const j = idx+dir; if(j<0||j>=arr.length) return; [arr[idx],arr[j]]=[arr[j],arr[idx]]; arr.forEach((t,i)=> t.order=i+1); copy[active].tasks=arr; setTemplates(copy); };
+        const resetDefaults = () => { const d=defaultTemplates(); setTemplates(d); localStorage.setItem(LS_TEMPLATES, JSON.stringify(d)); localStorage.setItem(LS_TPL_VERSION, String(TPL_VERSION)); };
+        return (
+          <div className="bg-white p-4 rounded-2xl shadow border">
+            <Section title="הגדרות כלליות">
+              <label className="text-sm">מייל לקבלת דוחות
+                <input value={adminEmail} onChange={e=>setAdminEmail(e.target.value)} className="mt-1 w-full border rounded-md px-3 py-2" placeholder="your@email.com" />
+              </label>
+              <div className="text-xs text-gray-500">יש שלוש דרכים לשלוח דוח: mailto (לקוח מייל במחשב), או לפתוח ישירות ב‑Gmail/Outlook Web, או להעתיק ללוח.</div>
+              <div className="text-xs text-gray-500">שמירת נתונים: 30 יום. יש כפתור מחיקה יזומה בלשונית דוחות.</div>
+              <div className="mt-2 flex gap-2">
+                <button onClick={resetDefaults} className="px-3 py-1.5 rounded-md border">אפס תבניות לברירת מחדל</button>
+                <span className="text-xs text-gray-500 self-center">גרסת תבניות: {TPL_VERSION}</span>
+              </div>
+            </Section>
+
+            <Section title="עריכת תבניות (בוקר/ערב)">
+              <div className="flex gap-2 mb-3">
+                <button onClick={()=>setActive('morning')} className={`px-3 py-1.5 rounded-md border ${active==='morning'?'bg-gray-900 text-white':'bg-white'}`}>בוקר</button>
+                <button onClick={()=>setActive('evening')} className={`px-3 py-1.5 rounded-md border ${active==='evening'?'bg-gray-900 text-white':'bg-white'}`}>ערב</button>
+              </div>
+              <div className="space-y-2">
+                {tpl.tasks.slice().sort((a,b)=> (a.order||0)-(b.order||0)).map((t,idx)=> (
+                  <div key={t.id} className={`border rounded-md p-2 ${t.isHeader? 'bg-gray-50':''}`}>
+                    <div className="grid md:grid-cols-5 gap-2 items-center">
+                      <input className="md:col-span-2 border rounded-md px-2 py-1 text-sm" value={t.title} onChange={e=>updateTask(t.id,{title:e.target.value})} />
+                      <input className="border rounded-md px-2 py-1 text-sm" placeholder="קטגוריה (לא חובה)" value={t.category||''} onChange={e=>updateTask(t.id,{category:e.target.value||undefined})} disabled={t.isHeader} />
+                      <label className="text-xs flex items-center gap-2">
+                        <input type="checkbox" checked={!!t.required} onChange={e=>updateTask(t.id,{required:e.target.checked})} disabled={t.isHeader} /> חובה
+                      </label>
+                      <div className="flex justify-end gap-1">
+                        <button onClick={()=>reorder(idx,-1)} className="px-2 py-1 text-xs rounded-md border">למעלה</button>
+                        <button onClick={()=>reorder(idx,1)} className="px-2 py-1 text-xs rounded-md border">למטה</button>
+                        <button onClick={()=>removeTask(t.id)} className="px-2 py-1 text-xs rounded-md border text-red-600">מחק</button>
+                      </div>
+                    </div>
+                    {t.isHeader && <div className="text-[10px] text-gray-500 mt-1">זהו שורת כותרת להפרדה, ללא סטטוס.</div>}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3"><button onClick={addTask} className="px-4 py-2 rounded-md border">הוסף משימה</button></div>
+            </Section>
+
+            <Section title="איך משתפים בוואטסאפ?">
+              <ul className="list-disc pl-5 text-sm space-y-1">
+                <li>פותחים את הקובץ הזה בדפדפן וממקמים על שרות סטטי (כמו Vercel/Netlify/Cloudflare Pages).</li>
+                <li>שמים את הקישור בתיאור קבוצת הוואטסאפ. כל עובד יכול לפתוח ולמלא משמרת חדשה.</li>
+                <li>שמירה מקומית ודוחות במייל בלחיצה.</li>
+              </ul>
+            </Section>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    </script>
+  </body>
 </html>

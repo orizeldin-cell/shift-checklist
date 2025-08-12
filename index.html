@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>צ'ק ליסט משמרות</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; direction: rtl; }
+h1 { text-align: center; color: #333; }
+.section-title { font-weight: bold; margin-top: 20px; color: #444; }
+.task { display: flex; align-items: center; margin: 5px 0; }
+.task input { margin-left: 10px; }
+button { margin-top: 20px; padding: 10px 15px; font-size: 16px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h1>צ'ק ליסט משמרות</h1>
+
+<div id="checklist"></div>
+
+<button onclick="downloadReport()">הורד דוח</button>
+
+<script>
+const eveningTasks = [
+    "לכתוב רשימת הכנות למחר (חובה, הכנות)",
+    "לוודא הזמנות למחר ביומן, לבדוק אם צריך לעדכן את הקונדיטוריה או המטבח (חובה, הכנות)",
+    "להתחיל לבצע מטלות ערב (חובה, מטלות)",
+    "לספור קופה, לוודא עם משמרת בוקר (חובה, מטלות)",
+    "לבדוק סטטוס מי סוכר, שוקו וג'ינג'ר (חובה, הכנות)",
+    "לוודא שכל מטלות הערב בוצעו (חובה, מטלות)",
+    "לעשות רשימת מאפים בשעה 20:00 (חובה, מטלות)",
+    "למלא את המלאים בבר, כולל מגירות שירותים ועמדת TA (חובה, הכנות)",
+    "הוצאת פחים וקשירה של הפחים החדשים (חובה, ניקיון)",
+    "איפוס שירותים (חובה, ניקיון)",
+    "שטיפה יסודית מאחורי מדף בחושות (חובה, ניקיון)",
+    "לנקות את הבר (חובה, ניקיון)",
+    "טיאטוא ואיפוס של הבחוץ (חובה, ניקיון)",
+    "הוצאת מאפים (חובה, מטלות)",
+    "למלא מקפיא עוגות (לא חובה, הכנות)",
+    "ניקיון מדף לחמים (חובה, ניקיון)",
+    "ניקיון שולחן מאפים (חובה, ניקיון)",
+    "ספירת וסגירת קופה (חובה, מטלות)",
+    "סגירת מכונת קפה (חובה, מטלות)",
+    "סיבוב מקררים, תנור וגז (חובה, בטיחות)",
+    "סיבוב חלונות ומזגנים במסעדה (חובה, בטיחות)",
+    "כיבוי אורות ומוזיקה (חובה, בטיחות)"
+];
+
+function loadChecklist() {
+    const container = document.getElementById("checklist");
+    eveningTasks.forEach(task => {
+        const div = document.createElement("div");
+        div.className = "task";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        div.appendChild(checkbox);
+        const label = document.createElement("label");
+        label.textContent = task;
+        div.appendChild(label);
+        container.appendChild(div);
+    });
+}
+
+function downloadReport() {
+    const checkedTasks = [];
+    document.querySelectorAll(".task input").forEach((cb, idx) => {
+        if (cb.checked) checkedTasks.push(eveningTasks[idx]);
+    });
+    const blob = new Blob([checkedTasks.join("\n")], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "shift_report.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+loadChecklist();
+</script>
+
+</body>
+</html>
